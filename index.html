@@ -157,6 +157,17 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .feito:hover{color:var(--fg)}
 .feito:hover .play{transform:translateX(3px)}
 .feito:focus-visible{outline:2px solid var(--azul);outline-offset:3px;border-radius:4px}
+.share{font:inherit;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;
+  border:1.5px solid var(--line);background:transparent;color:var(--fg);transition:border-color .2s,background .2s}
+.share:hover{border-color:var(--fg)}
+.share.ok{background:var(--verde);border-color:var(--verde);color:#0b1f12}
+.share:focus-visible{outline:3px solid var(--azul);outline-offset:2px}
+.solo-bar .wrap{padding-block:4px 0}
+.solo-bar a{display:inline-flex;font-weight:700;font-size:14px;color:var(--fg);text-decoration:none;padding:9px 16px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+.solo-bar a:hover{border-color:var(--fg)}
+body.solo .hero{padding-block:36px 28px}
+body.solo .proj{padding-top:16px}
+body.solo .idx{display:none}
 </style>
 </head>
 <body>
@@ -190,6 +201,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
   </div>
 </div></header>
 
+<div class="solo-bar gut" id="soloBar" hidden><div class="wrap"><a href="#" id="soloAll">← Ver todas as telas (<span id="soloCount"></span>)</a></div></div>
 <main id="list"></main>
 
 <section class="contact gut" id="contato"><div class="wrap">
@@ -204,7 +216,8 @@ function renderProject(p, i){
   sec.className = "proj gut"; sec.dataset.proj = i; sec.style.setProperty("--c", COLORS[i % 3]);
   sec.innerHTML = `<div class="wrap"><article class="proj-card" data-rv>
     <div class="ph-row"><span class="idx">${pad(i+1)}</span><h2>${val(p.nome)}</h2>
-      <div class="meta">${p.local ? `<span>${val(p.local)}</span>` : ""}<b>${val(p.tipo)}</b></div></div>
+      <div class="meta">${p.local ? `<span>${val(p.local)}</span>` : ""}<b>${val(p.tipo)}</b></div>
+      <button type="button" class="share" data-share="${p.slug}" aria-label="Copiar link só desta tela"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Copiar link</span></button></div>
     <div class="main-slot"></div>
     <div class="row n${Math.min(p.caixas.length,2)}">${p.caixas.slice(0,2).map((k,j)=>`<figure class="spk"><div class="s${j+1}"></div>
         <figcaption><small>${esc(k.label)}</small><b>${val(k.desc)}</b></figcaption></figure>`).join("")}
@@ -248,6 +261,7 @@ const CONFIG = {
   mensagem: "Olá! Vi o portfólio de telas LED da iCasas e quero um orçamento.",
   projetos: TELAS.filter(t => t.pronto !== false).map(t => ({
     nome: `Tela ${fmtM(t.larg)} × ${fmtM(t.alt)} m`,
+    slug: `tela-${t.larg}x${t.alt}`.replace(/\./g, "-"),   /* link próprio: site#tela-4x2 */
     local: "",
     tipo: "Instalação externa",
     video: t.video,
@@ -350,9 +364,38 @@ addEventListener("keydown", e => { if (e.key === "Escape" && !lb.hidden) closeLB
 /* ---------- render ---------- */
 const P = CONFIG.projetos;
 const list = $("list");
-P.forEach((p, i) => list.append(renderProject(p, i)));   /* renderProject vem de cada modelo */
-const WA = `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(CONFIG.mensagem)}`;
-document.querySelectorAll("[data-wa]").forEach(a => { a.href = WA; a.target = "_blank"; a.rel = "noopener"; });
+P.forEach((p, i) => { const s = renderProject(p, i); s.id = p.slug; list.append(s); });   /* renderProject vem de cada modelo */
+const waLink = msg => `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(msg)}`;
+const setWA = msg => document.querySelectorAll("[data-wa]").forEach(a => { a.href = waLink(msg); a.target = "_blank"; a.rel = "noopener"; });
+setWA(CONFIG.mensagem);
+
+/* ---------- link de cada tela ----------
+   site/          -> mostra todas as telas
+   site/#tela-4x2 -> mostra só aquela tela (para mandar ao cliente) */
+const baseURL = () => location.href.split("#")[0];
+const TITLE = document.title;
+document.querySelectorAll("[data-share]").forEach(b => b.addEventListener("click", () => {
+  const url = `${baseURL()}#${b.dataset.share}`, txt = b.querySelector("span");
+  const done = () => { txt.textContent = "Link copiado"; b.classList.add("ok"); setTimeout(() => { txt.textContent = "Copiar link"; b.classList.remove("ok"); }, 1800); };
+  const fallback = () => { const i = document.createElement("input"); i.value = url; document.body.append(i); i.select();
+    try { document.execCommand("copy"); done(); } catch(_) {} i.remove(); };
+  navigator.clipboard ? navigator.clipboard.writeText(url).then(done).catch(fallback) : fallback();
+}));
+function route(){
+  const slug = location.hash.slice(1), hit = P.find(p => p.slug === slug);
+  document.body.classList.toggle("solo", !!hit);
+  document.querySelectorAll(".proj").forEach(s => s.hidden = !!hit && s.id !== slug);
+  const bar = $("soloBar");
+  if (bar) bar.hidden = !hit;
+  if (hit){
+    document.title = `${hit.nome} · iCasas Automação`;
+    setWA(`Olá! Vi a ${hit.nome} (${hit.tela.modelo}) da iCasas e quero um orçamento.`);
+    const n = $("soloCount"); if (n) n.textContent = P.length;
+    scrollTo(0, 0);
+  } else { document.title = TITLE; setWA(CONFIG.mensagem); }
+}
+addEventListener("hashchange", route);
+route();
 const ph = $("phone"); if (ph) ph.textContent = CONFIG.telefone;
 
 /* Entrada suave: só anima o que ainda está abaixo da tela; sem JS tudo aparece normal */
